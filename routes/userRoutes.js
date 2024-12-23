@@ -1,7 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const User = require("./../models/user");
-const { jwtAuthMiddleware, generateToken } = require("./../jwt");
+const jwt = require("jsonwebtoken");
+const { userAuth } = require("../middlewares/auth");
+require("dotenv").config();
 
 // POST route to add a person
 router.post("/signup", async (req, res) => {
@@ -36,16 +38,8 @@ router.post("/signup", async (req, res) => {
     const newUser = new User(data);
 
     //save new user to the database
-    const response = await newUser.save();
-    console.log("data saved");
-
-    //send id as payload for token
-    const payload = { id: response.id };
-    console.log(JSON.stringify(payload));
-
-    //generating the token
-    const token = generateToken(payload);
-    res.status(200).json({ response: response, token: token });
+    await newUser.save();
+    res.status(200).send("User Created Successfully...!");
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "Internal Server Error" });
@@ -76,13 +70,11 @@ router.post("/signin", async (req, res) => {
     }
 
     // generate Token
-    const payload = {
-      id: user.id,
-    };
-    const token = generateToken(payload);
+    const token = await jwt.sign({ _id: user._id }, process.env.JWT_SECRET);
+    res.cookie("token", token, { expires: new Date(Date.now() + 8 * 3600000) });
 
     // return token as response
-    res.json({ token });
+    res.status(200).json("User LoggedIn Successfully...!");
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });
@@ -90,10 +82,9 @@ router.post("/signin", async (req, res) => {
 });
 
 // Profile route
-router.get("/profile", jwtAuthMiddleware, async (req, res) => {
+router.get("/profile", userAuth, async (req, res) => {
   try {
-    const userData = req.user;
-    const userId = userData.id;
+    const userId = req.user.id;
     const user = await User.findById(userId);
     res.status(200).json({ user });
   } catch (err) {
@@ -103,7 +94,7 @@ router.get("/profile", jwtAuthMiddleware, async (req, res) => {
 });
 
 //Changing the password
-router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
+router.put("/profile/password", userAuth, async (req, res) => {
   try {
     const userId = req.user.id; // Extract the id from the token
     const { currentPassword, newPassword } = req.body; // Extract current and new passwords from request body
@@ -120,7 +111,7 @@ router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
 
     // If user does not exist or password does not match, return error
     if (!user || !(await user.comparePassword(currentPassword))) {
-      return res.status(401).json({ error: "Invalid current password" });
+      return res.status(401).json({ error: "Invalid Crediantials" });
     }
 
     // Update the user's password
@@ -128,7 +119,7 @@ router.put("/profile/password", jwtAuthMiddleware, async (req, res) => {
     await user.save();
 
     console.log("password updated");
-    res.status(200).json({ message: "Password updated" });
+    res.status(200).send("Password updated");
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

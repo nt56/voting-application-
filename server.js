@@ -1,12 +1,11 @@
 const express = require("express");
 const app = express();
+const db = require("./config/db");
+const cookieParser = require("cookie-parser");
+app.use(express.json());
+app.use(cookieParser());
 
-const db = require("./db");
 require("dotenv").config();
-
-const bodyParser = require("body-parser");
-app.use(bodyParser.json());
-
 const PORT = process.env.PORT || 3000;
 
 // Import the router files

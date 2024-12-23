@@ -2,34 +2,25 @@ const express = require("express");
 const router = express.Router();
 const Candidate = require("./../models/candidate");
 const User = require("./../models/user");
-const { jwtAuthMiddleware, generateToken } = require("../jwt");
-
-//check the user is admin or not
-const isAdmin = async (userID) => {
-  try {
-    const user = User.findById(userID);
-    if (user.role === "admin") {
-      return true;
-    }
-  } catch (err) {
-    return err;
-  }
-};
+const { isAdmin } = require("../utils/validate");
+const { userAuth } = require("../middlewares/auth");
 
 // POST route to add a candidate
-router.post("/", jwtAuthMiddleware, async (req, res) => {
+router.post("/newCandidate", userAuth, async (req, res) => {
   try {
     //if not admin then return
-    if (!isAdmin(req.user.id)) {
-      return res.status(403).json({ message: "user does not have admin role" });
+    const { _id } = req.user;
+    if (!isAdmin(_id)) {
+      return res
+        .status(403)
+        .json({ message: "only admin can add the candidates" });
     }
 
     //if admin then continue and add candidate
     const data = req.body;
     const newCandidate = new Candidate(data);
-    const response = await newCandidate.save();
-    console.log("candidate data saved");
-    res.status(200).json({ response: response });
+    await newCandidate.save();
+    res.status(200).send("candidate data saved");
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "Internal Server Error" });
@@ -37,11 +28,13 @@ router.post("/", jwtAuthMiddleware, async (req, res) => {
 });
 
 //update candidate data
-router.put("/:candidateID", jwtAuthMiddleware, async (req, res) => {
+router.patch("/updateCandidate/:candidateID", userAuth, async (req, res) => {
   try {
     //if not admin then return
     if (!isAdmin(req.user.id)) {
-      return res.status(403).json({ message: "user does not have admin role" });
+      return res
+        .status(403)
+        .json({ message: "only admin can update the candidates" });
     }
 
     //if admin then continue and update candidate
@@ -60,8 +53,7 @@ router.put("/:candidateID", jwtAuthMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Candidate not found" });
     }
 
-    console.log("candidate data updated");
-    res.status(200).json(response);
+    res.status(200).send("candidate data updated");
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "Internal Server Error" });
@@ -69,11 +61,13 @@ router.put("/:candidateID", jwtAuthMiddleware, async (req, res) => {
 });
 
 //delete candidate data
-router.delete("/:candidateID", jwtAuthMiddleware, async (req, res) => {
+router.delete("/deleteCandidate/:candidateID", userAuth, async (req, res) => {
   try {
     //if not admin then return
     if (!isAdmin(req.user.id)) {
-      return res.status(403).json({ message: "user does not have admin role" });
+      return res
+        .status(403)
+        .json({ message: "only admin can delete the candidates" });
     }
 
     //if admin then continue and update candidate
@@ -84,8 +78,7 @@ router.delete("/:candidateID", jwtAuthMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Candidate not found" });
     }
 
-    console.log("candidate deleted");
-    res.status(200).json(response);
+    res.status(200).send("candidate deleted");
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "Internal Server Error" });
@@ -93,11 +86,9 @@ router.delete("/:candidateID", jwtAuthMiddleware, async (req, res) => {
 });
 
 //voting
-// no admin can vote
-// user can only vote once
-router.post("/vote/:candidateID", jwtAuthMiddleware, async (req, res) => {
-  candidateID = req.params.candidateID;
-  userId = req.user.id;
+router.post("/vote/:candidateID", userAuth, async (req, res) => {
+  const candidateID = req.params.candidateID;
+  const userId = req.user._id;
 
   try {
     // Find the Candidate document with the specified candidateID
@@ -109,13 +100,13 @@ router.post("/vote/:candidateID", jwtAuthMiddleware, async (req, res) => {
     // Find the User document with the specified userID
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "user not found" });
+      return res.status(404).send("user not found");
     }
     if (user.role == "admin") {
-      return res.status(403).json({ message: "admin is not allowed" });
+      return res.status(403).send("admin is not allowed");
     }
     if (user.isVoted) {
-      return res.status(400).json({ message: "You have already voted" });
+      return res.status(400).send("You have already voted");
     }
 
     // Update the Candidate document to record the vote
@@ -126,6 +117,8 @@ router.post("/vote/:candidateID", jwtAuthMiddleware, async (req, res) => {
     // update the user document
     user.isVoted = true;
     await user.save();
+
+    res.status(200).send("Vote is successfull...!");
   } catch (err) {
     console.log(err);
     return res.status(500).json({ error: "Internal Server Error" });
